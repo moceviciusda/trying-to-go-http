@@ -88,6 +88,16 @@ func ParseHTTPRequest(req []byte) (HTTPRequest, error) {
 	return result, nil
 }
 
+func notFoundController() (response HTTPResponse) {
+	response.status = Status{version: "HTTP/1.1", code: 404, reason: "Not Found"}
+	return
+}
+
+func rootController() (response HTTPResponse) {
+	response.status = Status{version: "HTTP/1.1", code: 200, reason: "OK"}
+	return
+}
+
 func echoController(req HTTPRequest) (response HTTPResponse) {
 	response.status.version = "HTTP/1.1"
 
@@ -109,13 +119,21 @@ func echoController(req HTTPRequest) (response HTTPResponse) {
 	return
 }
 
-func notFoundController() (response HTTPResponse) {
-	response.status = Status{version: "HTTP/1.1", code: 404, reason: "Not Found"}
-	return
-}
+func userAgentController(req HTTPRequest) (response HTTPResponse) {
+	response.status.version = "HTTP/1.1"
 
-func rootController() (response HTTPResponse) {
-	response.status = Status{version: "HTTP/1.1", code: 200, reason: "OK"}
+	userAgent, exists := req.headers["User-Agent"]
+	if !exists {
+		response.status.code = 400
+		response.status.reason = "Invalid Headers"
+		return
+	}
+
+	response.status.code = 200
+	response.status.reason = "OK"
+	response.body = Body(userAgent)
+	headers := Headers{"Content-Type": "text/plain", "Content-Length": fmt.Sprint(len(response.body))}
+	response.headers = headers
 	return
 }
 
@@ -126,19 +144,27 @@ func main() {
 		os.Exit(1)
 	}
 
-	connection, err := l.Accept()
-	if err != nil {
-		fmt.Println("Error accepting connection: ", err.Error())
-		os.Exit(1)
-	}
+	for {
+		connection, err := l.Accept()
+		if err != nil {
+			fmt.Println("Error accepting connection: ", err.Error())
+			os.Exit(1)
+		}
 
+		go handleConnection(connection)
+	}
+}
+
+func handleConnection(connection net.Conn) {
 	req := make([]byte, 1024)
-	connection.Read(req)
+	_, err := connection.Read(req)
+	if err != nil {
+		fmt.Println("Error reading request: ", err.Error())
+	}
 
 	request, err := ParseHTTPRequest(req)
 	if err != nil {
 		fmt.Println("Error parsing HTTP request: ", err.Error())
-		os.Exit(1)
 	}
 
 	var response HTTPResponse
@@ -147,11 +173,11 @@ func main() {
 		response = rootController()
 	} else if strings.HasPrefix(request.request.target, "/echo") {
 		response = echoController(request)
+	} else if strings.HasPrefix(request.request.target, "/user-agent") {
+		response = userAgentController(request)
 	} else {
 		response = notFoundController()
 	}
 
-	print(response.String())
 	connection.Write([]byte(response.String()))
-
 }

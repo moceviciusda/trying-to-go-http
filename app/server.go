@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -47,8 +48,45 @@ type HTTPResponse struct {
 	body    Body
 }
 
+type HTTPRequest struct {
+	request Request
+	headers Headers
+	body    Body
+}
+
 func (res HTTPResponse) String() string {
 	return fmt.Sprintf("%v\r\n%v\r\n%v", res.status, res.headers, res.body)
+}
+
+func ParseHTTPRequest(req []byte) (HTTPRequest, error) {
+	var result HTTPRequest
+	sreq, srest, ok := strings.Cut(string(req), "\r\n")
+
+	sreqSlice := strings.Split(sreq, " ")
+
+	if !ok || len(sreqSlice) < 3 {
+		return result, errors.New(fmt.Sprintf("invalid request: %v", req))
+	}
+	result.request = Request{method: sreqSlice[0], target: sreqSlice[1], version: sreqSlice[2]}
+
+	sheaders, sbody, ok := strings.Cut(srest, "\r\n\r\n")
+	if !ok {
+		return result, errors.New(fmt.Sprintf("invalid request: %v", req))
+	}
+
+	headers := map[string]string{}
+	for _, sheader := range strings.Split(sheaders, "\r\n") {
+		k, v, ok := strings.Cut(sheader, ": ")
+		if ok {
+			headers[k] = v
+		}
+	}
+
+	result.headers = headers
+
+	result.body = Body(sbody)
+
+	return result, nil
 }
 
 func main() {
@@ -64,11 +102,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	response := HTTPResponse{status: Status{version: "HTTP/1.1"}}
 	req := make([]byte, 1024)
 	connection.Read(req)
 
-	if strings.HasPrefix(string(req), "GET / ") {
+	request, err := ParseHTTPRequest(req)
+	if err != nil {
+		fmt.Println("Error parsing HTTP request: ", err.Error())
+		os.Exit(1)
+	}
+
+	response := HTTPResponse{status: Status{version: "HTTP/1.1"}}
+
+	if request.request.target == "/" {
 		response.status.code = 200
 		response.status.reason = "OK"
 	} else {

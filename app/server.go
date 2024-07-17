@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -35,7 +34,7 @@ type Headers map[string]string
 func (h Headers) String() string {
 	b := new(bytes.Buffer)
 	for k, v := range h {
-		fmt.Fprintf(b, "%v %v\r\n", k, v)
+		fmt.Fprintf(b, "%v: %v\r\n", k, v)
 	}
 	return b.String()
 }
@@ -65,13 +64,13 @@ func ParseHTTPRequest(req []byte) (HTTPRequest, error) {
 	sreqSlice := strings.Split(sreq, " ")
 
 	if !ok || len(sreqSlice) < 3 {
-		return result, errors.New(fmt.Sprintf("invalid request: %v", req))
+		return result, fmt.Errorf("invalid request: %v", req)
 	}
 	result.request = Request{method: sreqSlice[0], target: sreqSlice[1], version: sreqSlice[2]}
 
 	sheaders, sbody, ok := strings.Cut(srest, "\r\n\r\n")
 	if !ok {
-		return result, errors.New(fmt.Sprintf("invalid request: %v", req))
+		return result, fmt.Errorf("invalid request: %v", req)
 	}
 
 	headers := map[string]string{}
@@ -113,14 +112,32 @@ func main() {
 
 	response := HTTPResponse{status: Status{version: "HTTP/1.1"}}
 
+	// TODO: figure out how to do proper routing. This is 🤮
 	if request.request.target == "/" {
 		response.status.code = 200
 		response.status.reason = "OK"
+	} else if strings.HasPrefix(request.request.target, "/echo") {
+		p := strings.Split(request.request.target, "/")
+
+		if len(p) != 3 {
+			response.status.code = 404
+			response.status.reason = "Not Found"
+		} else {
+			body := Body(p[2])
+			headers := Headers{"Content-Type": "text/plain", "Content-Length": fmt.Sprint(len(body))}
+			print(headers.String())
+
+			response.status.code = 200
+			response.status.reason = "OK"
+			response.headers = headers
+			response.body = body
+		}
 	} else {
 		response.status.code = 404
 		response.status.reason = "Not Found"
 	}
 
+	print(response.String())
 	connection.Write([]byte(response.String()))
 
 }

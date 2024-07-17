@@ -88,6 +88,37 @@ func ParseHTTPRequest(req []byte) (HTTPRequest, error) {
 	return result, nil
 }
 
+func echoController(req HTTPRequest) (response HTTPResponse) {
+	response.status.version = "HTTP/1.1"
+
+	p := strings.Split(req.request.target, "/")
+	if len(p) != 3 {
+		response.status.code = 404
+		response.status.reason = "Not Found"
+	} else {
+		body := Body(p[2])
+		headers := Headers{"Content-Type": "text/plain", "Content-Length": fmt.Sprint(len(body))}
+		print(headers.String())
+
+		response.status.code = 200
+		response.status.reason = "OK"
+		response.headers = headers
+		response.body = body
+	}
+
+	return
+}
+
+func notFoundController() (response HTTPResponse) {
+	response.status = Status{version: "HTTP/1.1", code: 404, reason: "Not Found"}
+	return
+}
+
+func rootController() (response HTTPResponse) {
+	response.status = Status{version: "HTTP/1.1", code: 200, reason: "OK"}
+	return
+}
+
 func main() {
 	l, err := net.Listen("tcp", "0.0.0.0:4221")
 	if err != nil {
@@ -110,31 +141,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	response := HTTPResponse{status: Status{version: "HTTP/1.1"}}
-
+	var response HTTPResponse
 	// TODO: figure out how to do proper routing. This is 🤮
 	if request.request.target == "/" {
-		response.status.code = 200
-		response.status.reason = "OK"
+		response = rootController()
 	} else if strings.HasPrefix(request.request.target, "/echo") {
-		p := strings.Split(request.request.target, "/")
-
-		if len(p) != 3 {
-			response.status.code = 404
-			response.status.reason = "Not Found"
-		} else {
-			body := Body(p[2])
-			headers := Headers{"Content-Type": "text/plain", "Content-Length": fmt.Sprint(len(body))}
-			print(headers.String())
-
-			response.status.code = 200
-			response.status.reason = "OK"
-			response.headers = headers
-			response.body = body
-		}
+		response = echoController(request)
 	} else {
-		response.status.code = 404
-		response.status.reason = "Not Found"
+		response = notFoundController()
 	}
 
 	print(response.String())

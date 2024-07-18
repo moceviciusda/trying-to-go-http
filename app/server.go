@@ -108,14 +108,23 @@ func echoController(req HTTPRequest) (response HTTPResponse) {
 		return
 	}
 
+	response.headers = Headers{"Content-Type": "text/plain"}
+
+	acceptedEncodings := strings.Split(req.headers["Accept-Encoding"], ",")
+
+	for _, encoding := range acceptedEncodings {
+		if strings.TrimSpace(encoding) == "gzip" {
+			response.headers["Content-Encoding"] = "gzip"
+			break
+		}
+	}
+
 	body := Body(p[2])
-	headers := Headers{"Content-Type": "text/plain", "Content-Length": fmt.Sprint(len(body))}
-	print(headers.String())
 
 	response.status.code = 200
 	response.status.reason = "OK"
-	response.headers = headers
 	response.body = body
+	response.headers["Content-Length"] = fmt.Sprint(len(response.body))
 
 	return
 }

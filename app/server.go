@@ -105,16 +105,17 @@ func echoController(req HTTPRequest) (response HTTPResponse) {
 	if len(p) != 3 {
 		response.status.code = 404
 		response.status.reason = "Not Found"
-	} else {
-		body := Body(p[2])
-		headers := Headers{"Content-Type": "text/plain", "Content-Length": fmt.Sprint(len(body))}
-		print(headers.String())
-
-		response.status.code = 200
-		response.status.reason = "OK"
-		response.headers = headers
-		response.body = body
+		return
 	}
+
+	body := Body(p[2])
+	headers := Headers{"Content-Type": "text/plain", "Content-Length": fmt.Sprint(len(body))}
+	print(headers.String())
+
+	response.status.code = 200
+	response.status.reason = "OK"
+	response.headers = headers
+	response.body = body
 
 	return
 }
@@ -134,6 +135,33 @@ func userAgentController(req HTTPRequest) (response HTTPResponse) {
 	response.body = Body(userAgent)
 	headers := Headers{"Content-Type": "text/plain", "Content-Length": fmt.Sprint(len(response.body))}
 	response.headers = headers
+	return
+}
+
+func filesController(req HTTPRequest) (response HTTPResponse) {
+	response.status.version = "HTTP/1.1"
+	response.status.code = 404
+	response.status.reason = "Not Found"
+
+	p := strings.Split(req.request.target, "/")
+	if len(p) != 3 {
+		fmt.Println(fmt.Printf("Invalid route: %v", req.request.target))
+		return
+	}
+
+	file, err := os.ReadFile("files/" + p[2])
+	if err != nil {
+		fmt.Println("Failed to read file: ", err.Error())
+		return
+	}
+
+	headers := Headers{"Content-Type": "text/plain", "Content-Length": fmt.Sprint(len(file))}
+
+	response.status.code = 200
+	response.status.reason = "OK"
+	response.headers = headers
+	response.body = Body(file)
+
 	return
 }
 
@@ -175,6 +203,8 @@ func handleConnection(connection net.Conn) {
 		response = echoController(request)
 	} else if strings.HasPrefix(request.request.target, "/user-agent") {
 		response = userAgentController(request)
+	} else if strings.HasPrefix(request.request.target, "/files") {
+		response = filesController(request)
 	} else {
 		response = notFoundController()
 	}

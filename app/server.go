@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"fmt"
 	"strings"
 
@@ -108,6 +109,8 @@ func echoController(req HTTPRequest) (response HTTPResponse) {
 		return
 	}
 
+	response.body = Body(p[2])
+
 	response.headers = Headers{"Content-Type": "text/plain"}
 
 	acceptedEncodings := strings.Split(req.headers["Accept-Encoding"], ",")
@@ -115,15 +118,18 @@ func echoController(req HTTPRequest) (response HTTPResponse) {
 	for _, encoding := range acceptedEncodings {
 		if strings.TrimSpace(encoding) == "gzip" {
 			response.headers["Content-Encoding"] = "gzip"
+
+			var bodyBytes bytes.Buffer
+			writer := gzip.NewWriter(&bodyBytes)
+			writer.Write([]byte(response.body))
+			writer.Close()
+			response.body = Body(bodyBytes.String())
 			break
 		}
 	}
 
-	body := Body(p[2])
-
 	response.status.code = 200
 	response.status.reason = "OK"
-	response.body = body
 	response.headers["Content-Length"] = fmt.Sprint(len(response.body))
 
 	return

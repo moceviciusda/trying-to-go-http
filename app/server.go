@@ -155,7 +155,7 @@ func filesController(req HTTPRequest) (response HTTPResponse) {
 		return
 	}
 
-	headers := Headers{"Content-Type": "text/plain", "Content-Length": fmt.Sprint(len(file))}
+	headers := Headers{"Content-Type": "application/octet-stream", "Content-Length": fmt.Sprint(len(file))}
 
 	response.status.code = 200
 	response.status.reason = "OK"

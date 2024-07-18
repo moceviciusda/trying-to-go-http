@@ -148,19 +148,53 @@ func filesController(req HTTPRequest) (response HTTPResponse) {
 		fmt.Println(fmt.Printf("Invalid route: %v", req.request.target))
 		return
 	}
+	fileName := p[2]
 
-	file, err := os.ReadFile("files/" + p[2])
-	if err != nil {
-		fmt.Println("Failed to read file: ", err.Error())
-		return
+	dir := "files/"
+
+	switch req.request.method {
+	case "GET":
+		file, err := os.ReadFile(dir + fileName)
+		if err != nil {
+			fmt.Println("Failed to read file: ", err.Error())
+			return
+		}
+
+		headers := Headers{"Content-Type": "application/octet-stream", "Content-Length": fmt.Sprint(len(file))}
+
+		response.status.code = 200
+		response.status.reason = "OK"
+		response.headers = headers
+		response.body = Body(file)
+
+	case "POST":
+		file, err := os.Create(dir + fileName)
+		if err != nil {
+			fmt.Println("Failed to create file: ", err.Error())
+			response.status.code = 500
+			response.status.reason = "Internal Server Error"
+			return
+		}
+
+		defer file.Close()
+
+		content := strings.TrimRight(string(req.body), "\x00")
+
+		_, werr := file.WriteString(content)
+		if werr != nil {
+			fmt.Println("Failed to write file: ", werr.Error())
+			response.status.code = 500
+			response.status.reason = "Internal Server Error"
+			return
+		}
+
+		response.status.code = 201
+		response.status.reason = "Created"
+
+	default:
+		response.status.code = 405
+		response.status.reason = "Method Not Allowed"
 	}
-
-	headers := Headers{"Content-Type": "application/octet-stream", "Content-Length": fmt.Sprint(len(file))}
-
-	response.status.code = 200
-	response.status.reason = "OK"
-	response.headers = headers
-	response.body = Body(file)
 
 	return
 }
@@ -171,6 +205,8 @@ func main() {
 		fmt.Println("Failed to bind to port 4221")
 		os.Exit(1)
 	}
+
+	defer l.Close()
 
 	for {
 		connection, err := l.Accept()
@@ -184,6 +220,8 @@ func main() {
 }
 
 func handleConnection(connection net.Conn) {
+	defer connection.Close()
+
 	req := make([]byte, 1024)
 	_, err := connection.Read(req)
 	if err != nil {
@@ -196,7 +234,7 @@ func handleConnection(connection net.Conn) {
 	}
 
 	var response HTTPResponse
-	// TODO: figure out how to do proper routing. This is 🤮
+
 	if request.request.target == "/" {
 		response = rootController()
 	} else if strings.HasPrefix(request.request.target, "/echo") {

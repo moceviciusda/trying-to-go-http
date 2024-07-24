@@ -34,7 +34,7 @@ Unsupported routes will return a 404 status code.
 To run the server, execute the following command:
 
 ```bash
-go run main.go
+go run app/server.go
 ```
 
 The server will start on port 4221.
